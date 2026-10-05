@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f6f8"><link rel="manifest" href="manifest.json"><title>Groceries</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f2f7;color:#171717;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+.app{max-width:720px;margin:auto;min-height:100vh;padding:calc(18px + env(safe-area-inset-top)) 15px 40px}
+header{display:flex;justify-content:space-between;align-items:center}.title{font-size:31px;font-weight:800}.sub{color:#777;font-size:14px;margin-top:3px}
+button,input,select{font:inherit}button{border:0;cursor:pointer}.primary{background:#111;color:#fff;border-radius:13px;padding:11px 14px;font-weight:700}
+.toolbar{display:flex;gap:8px;margin:17px 0 10px}.search{flex:1;border:1px solid #ddd;background:#fff;border-radius:14px;padding:13px}
+select{border:1px solid #ddd;background:#fff;border-radius:14px;padding:11px}
+.card{background:#fff;border-radius:17px;margin:11px 0;box-shadow:0 2px 12px #00000008;overflow:hidden}.cathead{padding:15px 16px;border-bottom:1px solid #eee;font-weight:750;font-size:18px;display:flex;justify-content:space-between}.item{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid #eee}.item:last-child{border:0}
+.check{width:24px;height:24px;border:2px solid #aaa;border-radius:50%;background:#fff;flex:none}.done .check{background:#111;border-color:#111}.done .check:after{content:"✓";color:white;font-size:15px}.done .name{text-decoration:line-through;color:#999}.name{flex:1}.x{background:none;color:#999;font-size:20px;padding:5px}
+.stats{background:#fff;border-radius:15px;padding:12px 15px;margin:10px 0;color:#666}.bar{height:7px;background:#e6e6e8;border-radius:10px;margin-top:8px}.fill{height:100%;width:0;background:#111;border-radius:10px}
+.empty{text-align:center;color:#888;padding:35px}.modal{display:none;position:fixed;inset:0;background:#0007;align-items:flex-end}.modal.on{display:flex}.sheet{width:100%;max-width:720px;margin:auto;background:#fff;border-radius:23px 23px 0 0;padding:22px 17px calc(25px + env(safe-area-inset-bottom))}.sheet h2{margin:0 0 15px}.field{width:100%;padding:13px;border:1px solid #ddd;border-radius:13px;margin-bottom:10px}.row{display:flex;gap:9px}.row button{flex:1;padding:13px;border-radius:13px;font-weight:700}.secondary{background:#eee}.mic{background:#eee;border-radius:13px;padding:12px}
+.lists{display:flex;gap:8px;overflow:auto;margin:13px 0 4px}.pill{white-space:nowrap;background:#e5e5ea;padding:9px 13px;border-radius:20px;font-weight:650}.pill.active{background:#111;color:white}
+</style></head><body><main class="app">
+<header><div><div class="title">🛒 Groceries</div><div class="sub">Your shopping list</div></div><button class="primary" onclick="openAdd()">＋ Add</button></header>
+<div class="lists" id="lists"></div>
+<div class="toolbar"><input id="search" class="search" placeholder="Search groceries…" oninput="render()"><button class="mic" onclick="voice()">🎤</button></div>
+<div class="stats"><span id="stat">0 items</span><span id="pct" style="float:right">0% done</span><div class="bar"><div id="fill" class="fill"></div></div></div>
+<div id="content"></div>
+</main>
+<div id="modal" class="modal" onclick="if(event.target===this)closeAdd()"><div class="sheet">
+<h2>Add grocery</h2><input id="name" class="field" placeholder="e.g. Milk">
+<select id="cat" class="field"><option>🥩 Meat & Protein</option><option>🍌 Fruits</option><option>🥬 Vegetables</option><option>🥛 Dairy & Refrigerated</option><option>🥫 Pantry</option><option>🧊 Frozen</option><option>🧃 Drinks</option><option>🧼 Household</option></select>
+<div class="row"><button class="secondary" onclick="closeAdd()">Cancel</button><button class="primary" onclick="add()">Add Item</button></div>
+</div></div>
+<script>
+const seed=[
+["Chicken breast","🥩 Meat & Protein"],["Chicken thighs","🥩 Meat & Protein"],["Beef — any cut","🥩 Meat & Protein"],["Chicken wings","🥩 Meat & Protein"],["Shrimp","🥩 Meat & Protein"],["Fillets","🥩 Meat & Protein"],["Chicken drumsticks","🥩 Meat & Protein"],["Eggs","🥩 Meat & Protein"],["Pork ribs","🥩 Meat & Protein"],["Pork chops","🥩 Meat & Protein"],
+["Kiwi","🍌 Fruits"],["Bananas","🍌 Fruits"],["Cherries","🍌 Fruits"],["Avocados","🍌 Fruits"],["Celery","🥬 Vegetables"],["Cilantro","🥬 Vegetables"],["Green peppers","🥬 Vegetables"],["Red peppers","🥬 Vegetables"],["Yellow peppers","🥬 Vegetables"],["Red onion","🥬 Vegetables"],["Jalapeños","🥬 Vegetables"],["Garlic","🥬 Vegetables"]];
+let db=JSON.parse(localStorage.db||'null')||{lists:{Weekly:seed.map((x,i)=>({id:i,name:x[0],cat:x[1],done:false}))},active:"Weekly"};
+function save(){localStorage.db=JSON.stringify(db)}
+function renderLists(){document.getElementById("lists").innerHTML=Object.keys(db.lists).map(n=>`<button class="pill ${n===db.active?'active':''}" onclick="switchList('${esc(n)}')">${esc(n)}</button>`).join('')+`<button class="pill" onclick="newList()">＋ List</button>`}
+function render(){renderLists();let a=db.lists[db.active],q=document.getElementById("search").value.toLowerCase(), groups={};a.filter(x=>x.name.toLowerCase().includes(q)).forEach(x=>(groups[x.cat]??=[]).push(x));let out="";Object.entries(groups).forEach(([c,arr])=>{out+=`<section class="card"><div class="cathead">${c}<span style="color:#888;font-size:13px">${arr.filter(x=>x.done).length}/${arr.length}</span></div>`;arr.forEach(x=>out+=`<div class="item ${x.done?'done':''}"><button class="check" onclick="toggle(${x.id})"></button><div class="name">${esc(x.name)}</div><button class="x" onclick="del(${x.id})">×</button></div>`);out+="</section>"});document.getElementById("content").innerHTML=out||'<div class="empty">Nothing here yet.</div>';let total=a.length,done=a.filter(x=>x.done).length,p=total?Math.round(done/total*100):0;document.getElementById("stat").textContent=`${total} item${total===1?'':'s'}`;document.getElementById("pct").textContent=p+"% done";document.getElementById("fill").style.width=p+"%"}
+function esc(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function openAdd(){modal.classList.add("on");name.focus()}function closeAdd(){modal.classList.remove("on");name.value=""}
+function add(){let n=name.value.trim();if(!n)return;db.lists[db.active].push({id:Date.now(),name:n,cat:cat.value,done:false});save();closeAdd();render()}
+function toggle(id){let x=db.lists[db.active].find(x=>x.id===id);x.done=!x.done;save();render()}function del(id){db.lists[db.active]=db.lists[db.active].filter(x=>x.id!==id);save();render()}
+function switchList(n){db.active=n;save();render()}function newList(){let n=prompt("List name:");if(n&&!db.lists[n]){db.lists[n]=[];db.active=n;save();render()}}
+function voice(){if(!('webkitSpeechRecognition'in window)){alert("Voice input is not supported in this browser.");return}let r=new webkitSpeechRecognition();r.lang='en-US';r.onresult=e=>{name.value=e.results[0][0].transcript;openAdd()};r.start()}
+name.addEventListener("keydown",e=>{if(e.key==="Enter")add()});render();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
+</script></body></html>
